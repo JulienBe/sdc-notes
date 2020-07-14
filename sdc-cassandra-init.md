@@ -2,15 +2,10 @@ unwrapping this
 
 ~~~Dockerfile
 FROM onap/base_sdc-cqlsh:1.6.1
-
 COPY --chown=sdc:sdc chef-solo /home/sdc/chef-solo/
-
 COPY --chown=sdc:sdc chef-repo/cookbooks /home/sdc/chef-solo/cookbooks/
-
 COPY --chown=sdc:sdc startup.sh /home/sdc/
-
 RUN chmod 770 /home/sdc/startup.sh
-
 ENTRYPOINT [ "/home/sdc/startup.sh" ]
 ~~~
 
@@ -48,13 +43,9 @@ USER sdc
 
 
 COPY --chown=sdc:sdc chef-solo /home/sdc/chef-solo/
-
 COPY --chown=sdc:sdc chef-repo/cookbooks /home/sdc/chef-solo/cookbooks/
-
 COPY --chown=sdc:sdc startup.sh /home/sdc/
-
 RUN chmod 770 /home/sdc/startup.sh
-
 ENTRYPOINT [ "/home/sdc/startup.sh" ]
 ~~~
 
@@ -824,6 +815,43 @@ bash "executing-janusGraphSchemaCreation.sh" do
      /tmp/sdctool/scripts/janusGraphSchemaCreation.sh /tmp/sdctool/config
    EOH
 end
+~~~
+
+baseOperation.sh
+~~~bash
+#!/bin/bash
+
+CURRENT_DIR=`pwd`
+BASEDIR=$(dirname $0)
+
+if [ ${BASEDIR:0:1} = "/" ]
+then
+                FULL_PATH=$BASEDIR
+else
+                FULL_PATH=$CURRENT_DIR/$BASEDIR
+fi
+
+#echo $FULL_PATH
+
+LIB_DIR=$FULL_PATH/..
+BIN_DIR=$FULL_PATH/../bin
+CONFIG_DIR=$FULL_PATH/../config
+
+JVM_VERBOSE=-Dverbose
+
+JVM_LOG_FILE="-Dlogback.configurationFile=${CONFIG_DIR}/logback.xml"
+
+######################################################
+
+#BINS=`find $BIN_DIR -name "*.jar" | tr "\\n" ":"`
+
+LIBS=`find $LIB_DIR -name "*.jar" | tr "\\n" ":"`
+
+JARS=$JARS:$BINS:$LIBS
+
+
+export JARS
+export JVM_LOG_FILE
 ~~~
 
 janusGraphSchemaCreation.sh
