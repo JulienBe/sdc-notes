@@ -14,7 +14,7 @@ RUN chmod 770 /home/sdc/startup.sh
 ENTRYPOINT [ "/home/sdc/startup.sh" ]
 ~~~
 
-unpacks to 
+# unpacks to 
 
 ~~~Dockerfile
 FROM openjdk:8-jdk-alpine
@@ -57,6 +57,8 @@ RUN chmod 770 /home/sdc/startup.sh
 
 ENTRYPOINT [ "/home/sdc/startup.sh" ]
 ~~~
+
+# Overview 
 
 startup: just run `chef`
 
@@ -185,3 +187,83 @@ bash "import-Conformance" do
   EOH
 end
 ~~~
+
+# 1 createCsUser
+
+~~~ruby
+template "/tmp/create_cassandra_user.sh" do
+  source "create_cassandra_user.sh.erb"
+  sensitive true
+  mode 0755
+  variables({
+     :cassandra_ip      => node['Nodes']['CS'].first,
+     :cassandra_port    => node['cassandra']['cassandra_port'],
+     :cassandra_pwd     => ENV['CS_PASSWORD'],
+     :sdc_usr           => ENV['SDC_USER'],
+     :sdc_pwd           => ENV['SDC_PASSWORD']
+  })
+end
+
+
+bash "create-sdc-user" do
+   code <<-EOH
+     cd /tmp ; /tmp/create_cassandra_user.sh
+   EOH
+end
+~~~
+
+create_cassandra_user.sh.erb
+
+~~~bash
+#!/bin/bash
+
+CASSANDRA_IP=<%= @cassandra_ip %>
+CASSANDRA_PORT=<%= @cassandra_port %>
+CS_PASSWORD=<%= @cassandra_pwd %>
+SDC_USER=<%= @sdc_usr %>
+SDC_PASSWORD=<%= @sdc_pwd %>
+
+
+pass_changed=99
+retry_num=1
+is_up=0
+while [ $is_up -eq 0 -a $retry_num -le 100 ]; do
+
+   echo "exit" | cqlsh -u cassandra -p $CS_PASSWORD $CASSANDRA_IP $CASSANDRA_PORT  > /dev/null 2>&1
+   res1=$?
+
+   if [ $res1 -eq 0 ]; then
+      echo "`date` --- cqlsh is enabled to connect."
+      is_up=1
+   else
+      echo "`date` --- cqlsh is NOT enabled to connect yet. sleep 5"
+      sleep 5
+   fi
+   let "retry_num++"
+done
+
+cassandra_user_exist=`echo "list users;" | cqlsh -u cassandra -p $CS_PASSWORD $CASSANDRA_IP $CASSANDRA_PORT | grep -c $SDC_USER`
+        if [ $cassandra_user_exist -eq 1 ] ; then
+                echo "cassandra user $SDC_USER already exist"
+        else
+                echo "Going to create $SDC_USER"
+                echo "create user $SDC_USER with password '$SDC_PASSWORD' nosuperuser;" | cqlsh -u cassandra -p $CS_PASSWORD $CASSANDRA_IP $CASSANDRA_PORT
+        fi
+~~~
+
+Used variables:
+- cassandra_ip
+- cassandra_port
+- cassandra_pwd
+- sdc_usr
+- sdc_pwd
+
+tries to :
+```
+# check if it's up
+cqlsh -u cassandra -p $CS_PASSWORD $CASSANDRA_IP $CASSANDRA_PORT
+# check if the $SDC_USER is present
+cassandra_user_exist=`echo "list users;" | cqlsh -u cassandra -p $CS_PASSWORD $CASSANDRA_IP $CASSANDRA_PORT | grep -c $SDC_USER`
+# create user if not present
+echo "create user $SDC_USER with password '$SDC_PASSWORD' nosuperuser;" | cqlsh -u cassandra -p $CS_PASSWORD $CASSANDRA_IP $CASSANDRA_PORT
+```
