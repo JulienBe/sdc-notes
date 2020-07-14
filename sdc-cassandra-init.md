@@ -273,7 +273,8 @@ bash "install tar" do
      /bin/tar xf /tmp/sdctool.tar -C /tmp
   EOH
 end
-~~~ruby
+~~~
+
 What's in this tar ?
 
 ~~~ruby
