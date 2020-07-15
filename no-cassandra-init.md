@@ -40,4 +40,5 @@ while [ $retry_num -le 100 ]; do
 done
 ~~~
 
-Picked up existing script. `SC_PASSWORD` changed to `CASSANDRA_PASSWORD` for consistency
+~Picked up existing script~. Simplified the script, and there was a race condition so had to account for cassandra being accessible but not ready `SC_PASSWORD` changed to `CASSANDRA_PASSWORD` for consistency
+
