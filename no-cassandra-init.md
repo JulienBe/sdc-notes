@@ -26,31 +26,18 @@ Env variables :
 ~~~bash
 #!/bin/bash
 
-pass_changed=99
 retry_num=1
-is_up=0
-while [ $is_up -eq 0 -a $retry_num -le 100 ]; do
-
-   echo "exit" | cqlsh -u cassandra -p $CASSANDRA_PASSWORD $CASSANDRA_IP $CASSANDRA_PORT  > /dev/null 2>&1
-   res1=$?
-
-   if [ $res1 -eq 0 ]; then
-      echo "`date` --- cqlsh is enabled to connect."
-      is_up=1
+while [ $retry_num -le 100 ]; do
+   create_user=$(cqlsh -u cassandra -p $CASSANDRA_PASSWORD $CASSANDRA_IP $CASSANDRA_PORT -e  "CREATE USER IF NOT EXISTS  $SDC_USER WITH PASSWORD '$SDC_PASSWORD' NOSUPERUSER;")
+   not_up_yet=$(echo $create_user | grep -c "isn't yet setup")
+   if [ $not_up_yet -eq 1 ] ; then
+       echo "Waiting for Cassandra to finish it's startup"
    else
-      echo "`date` --- cqlsh is NOT enabled to connect yet. sleep 5"
-      sleep 5
+       echo "$SDC_USER is present"
+       exit 0
    fi
    let "retry_num++"
 done
-
-cassandra_user_exist=`echo "list users;" | cqlsh -u cassandra -p $CASSANDRA_PASSWORD $CASSANDRA_IP $CASSANDRA_PORT | grep -c $SDC_USER`
-if [ $cassandra_user_exist -eq 1 ] ; then
-        echo "cassandra user $SDC_USER already exist"
-else
-        echo "Going to create $SDC_USER"
-        echo "create user $SDC_USER with password '$SDC_PASSWORD' nosuperuser;" | cqlsh -u cassandra -p $CASSANDRA_PASSWORD $CASSANDRA_IP $CASSANDRA_PORT
-fi
 ~~~
 
 Picked up existing script. `SC_PASSWORD` changed to `CASSANDRA_PASSWORD` for consistency
