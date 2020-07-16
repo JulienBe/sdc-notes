@@ -24,21 +24,16 @@ Env variables :
 - $CASSANDRA_PORT
 
 ~~~bash
-#!/bin/bash
+# Load libraries
+. /opt/bitnami/scripts/libbitnami.sh
+. /opt/bitnami/scripts/libcassandra.sh
+. /opt/bitnami/scripts/libos.sh
 
-retry_num=1
-while [ $retry_num -le 100 ]; do
-   create_user=$(cqlsh -u cassandra -p $CASSANDRA_PASSWORD $CASSANDRA_IP $CASSANDRA_PORT -e  "CREATE USER IF NOT EXISTS  $SDC_USER WITH PASSWORD '$SDC_PASSWORD' NOSUPERUSER;")
-   not_up_yet=$(echo $create_user | grep -c "isn't yet setup")
-   if [ $not_up_yet -eq 1 ] ; then
-       echo "Waiting for Cassandra to finish it's startup"
-   else
-       echo "$SDC_USER is present"
-       exit 0
-   fi
-   let "retry_num++"
-done
+# wait for cassandra to be available
+wait_for_nodetool_up "100" "5"
+cqlsh -u cassandra -p $CASSANDRA_PASSWORD $CASSANDRA_IP $CASSANDRA_PORT -e "CREATE USER IF NOT EXISTS  $SDC_USER WITH PASSWORD '$SDC_PASSWORD' NOSUPERUSER;"
 ~~~
 
-~Picked up existing script~. Simplified the script, and there was a race condition so had to account for cassandra being accessible but not ready `SC_PASSWORD` changed to `CASSANDRA_PASSWORD` for consistency
+~Picked up existing script~. Simplified the script, and there was a race condition so had to account for cassandra being accessible but not ready. Using built in wait_for_nodetool_up
+`SC_PASSWORD` changed to `CASSANDRA_PASSWORD` for consistency
 
