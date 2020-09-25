@@ -378,3 +378,188 @@ public class ArtifactUuidFix {
 
     }
 ```
+
+```java
+@org.springframework.stereotype.Component("serviceBusinessLogic")
+public class ServiceBusinessLogic extends ComponentBusinessLogic {
+
+    private static final String CHANGE_SERVICE_DISTRIBUTION = "Change Service Distribution";
+    private static final String THE_SERVICE_WITH_SYSTEM_NAME_LOCKED = "The service with system name {} locked. ";
+    private static final String FAILED_TO_LOCK_SERVICE_RESPONSE_IS = "Failed to lock service {}. Response is {}. ";
+    private static final String AUDIT_BEFORE_SENDING_RESPONSE = "audit before sending response";
+    private static final Logger log = Logger.getLogger(ServiceBusinessLogic.class);
+    private static final String INITIAL_VERSION = "0.1";
+    private static final String STATUS_SUCCESS_200 = "200";
+    private static final String STATUS_DEPLOYED = "DEPLOYED";
+    static final String IS_VALID = "isValid";
+    private static final String PLACE_HOLDER_RESOURCE_TYPES = "validForResourceTypes";
+
+    private ForwardingPathOperation forwardingPathOperation;
+    private AuditCassandraDao auditCassandraDao;
+
+    private final IDistributionEngine distributionEngine;
+    private final ComponentInstanceBusinessLogic componentInstanceBusinessLogic;
+    private final ServiceDistributionValidation serviceDistributionValidation;
+    private final ForwardingPathValidator forwardingPathValidator;
+    private final UiComponentDataConverter uiComponentDataConverter;
+
+    private ServiceTypeValidator serviceTypeValidator;
+    private List<ServiceCreationPlugin> serviceCreationPluginList;
+
+    @Autowired
+    public void setServiceTypeValidator(ServiceTypeValidator serviceTypeValidator) {
+        this.serviceTypeValidator = serviceTypeValidator;
+    }
+
+
+    private ServiceFunctionValidator serviceFunctionValidator;
+
+    @Autowired
+    public void setServiceFunctionValidator(ServiceFunctionValidator serviceFunctionValidator) {
+        this.serviceFunctionValidator = serviceFunctionValidator;
+    }
+
+    @Autowired
+    private ServiceRoleValidator serviceRoleValidator;
+
+    @Autowired
+    private ServiceInstantiationTypeValidator serviceInstantiationTypeValidator;
+
+    @Autowired
+    private ServiceCategoryValidator serviceCategoryValidator;
+
+    @Autowired
+    private ServiceValidator serviceValidator;
+    ...
+    public Either<Service, ResponseFormat> generateVfModuleArtifacts(Service service, User modifier, boolean shouldLock, boolean inTransaction) {
+        Function<ComponentInstance, List<ArtifactGenerator<ArtifactDefinition>>> artifactTaskGeneratorCreator = ri ->
+                // Only one VF Module Artifact per instance - add it to a list of one
+                buildArtifactGenList(service, modifier, shouldLock, inTransaction, ri);
+
+        return generateDeploymentArtifacts(service, artifactTaskGeneratorCreator);
+    }
+    
+    private List<ArtifactGenerator<ArtifactDefinition>> buildArtifactGenList(Service service, User modifier, boolean shouldLock, boolean inTransaction, ComponentInstance ri) {
+        List<ArtifactGenerator<ArtifactDefinition>> asList = new ArrayList<>();
+
+        if (ri.getOriginType() == OriginTypeEnum.VF) {
+            asList = Arrays.asList(new VfModuleArtifactGenerator(modifier, ri, service, shouldLock, inTransaction));
+        }
+        return asList;
+    }
+    
+    
+    private ArtifactDefinition getVfModuleInstArtifactForCompInstance(ComponentInstance currVF, Service service, Wrapper<String> payloadWrapper, Wrapper<ResponseFormat> responseWrapper) {
+        ArtifactDefinition vfModuleAertifact = null;
+        if (MapUtils.isNotEmpty(currVF.getDeploymentArtifacts())) {
+            final Optional<ArtifactDefinition> optionalVfModuleArtifact =
+                    currVF.getDeploymentArtifacts().values().stream()
+                            .filter(p -> p.getArtifactType().equals(ArtifactTypeEnum.VF_MODULES_METADATA.getType()))
+                            .findAny();
+            if (optionalVfModuleArtifact.isPresent()) {
+                vfModuleAertifact = optionalVfModuleArtifact.get();
+            }
+        }
+        if (vfModuleAertifact == null) {
+            Either<ArtifactDefinition, ResponseFormat> createVfModuleArtifact = createVfModuleArtifact(currVF, service, payloadWrapper.getInnerElement());
+            if (createVfModuleArtifact.isLeft()) {
+                vfModuleAertifact = createVfModuleArtifact.left().value();
+            } else {
+                responseWrapper.setInnerElement(createVfModuleArtifact.right().value());
+            }
+        }
+        return vfModuleAertifact;
+    }
+        private Either<ArtifactDefinition, ResponseFormat> generateVfModuleInstanceArtifact(User modifier, ComponentInstance currVFInstance, Service service, boolean shouldLock, boolean inTransaction) {
+        ArtifactDefinition vfModuleArtifact = null;
+        Wrapper<ResponseFormat> responseWrapper = new Wrapper<>();
+        Wrapper<String> payloadWrapper = new Wrapper<>();
+        List<GroupInstance> groupsForCurrVF = collectGroupsInstanceForCompInstance(currVFInstance);
+        if (responseWrapper.isEmpty()) {
+            fillVfModuleInstHeatEnvPayload(groupsForCurrVF, payloadWrapper);
+        }
+        if (responseWrapper.isEmpty() && payloadWrapper.getInnerElement() != null) {
+            vfModuleArtifact = getVfModuleInstArtifactForCompInstance(currVFInstance, service, payloadWrapper, responseWrapper);
+        }
+        if (responseWrapper.isEmpty() && vfModuleArtifact != null) {
+            vfModuleArtifact = fillVfModulePayload(modifier, currVFInstance, vfModuleArtifact, shouldLock, inTransaction, payloadWrapper, responseWrapper, service);
+        }
+
+        Either<ArtifactDefinition, ResponseFormat> result;
+        if (responseWrapper.isEmpty()) {
+            result = Either.left(vfModuleArtifact);
+        } else {
+            result = Either.right(responseWrapper.getInnerElement());
+        }
+
+        return result;
+    }
+
+    private ArtifactDefinition fillVfModulePayload(User modifier, ComponentInstance currVF, ArtifactDefinition vfModuleArtifact, boolean shouldLock, boolean inTransaction, Wrapper<String> payloadWrapper, Wrapper<ResponseFormat> responseWrapper, Service service) {
+        ArtifactDefinition result = null;
+        Either<ArtifactDefinition, ResponseFormat> eitherPayload = artifactsBusinessLogic.generateArtifactPayload(vfModuleArtifact, ComponentTypeEnum.RESOURCE_INSTANCE, service, currVF.getName(), modifier, shouldLock, inTransaction, System::currentTimeMillis,
+                () -> Either.left(artifactsBusinessLogic.createEsArtifactData(vfModuleArtifact, payloadWrapper.getInnerElement().getBytes(StandardCharsets.UTF_8))), currVF.getUniqueId());
+        if (eitherPayload.isLeft()) {
+            result = eitherPayload.left().value();
+        } else {
+            responseWrapper.setInnerElement(eitherPayload.right().value());
+        }
+        if (result == null) {
+            result = vfModuleArtifact;
+        }
+
+        return result;
+    }
+
+    private Either<ArtifactDefinition, ResponseFormat> createVfModuleArtifact(ComponentInstance currVF, Service service, String vfModulePayloadString) {
+
+        ArtifactDefinition vfModuleArtifactDefinition = new ArtifactDefinition();
+        String newCheckSum = null;
+
+        vfModuleArtifactDefinition.setDescription("Auto-generated VF Modules information artifact");
+        vfModuleArtifactDefinition.setArtifactDisplayName("Vf Modules Metadata");
+        vfModuleArtifactDefinition.setArtifactType(ArtifactTypeEnum.VF_MODULES_METADATA.getType());
+        vfModuleArtifactDefinition.setArtifactGroupType(ArtifactGroupTypeEnum.DEPLOYMENT);
+        vfModuleArtifactDefinition.setArtifactLabel("vfModulesMetadata");
+        vfModuleArtifactDefinition.setTimeout(0);
+        vfModuleArtifactDefinition.setArtifactName(currVF.getNormalizedName() + "_modules.json");
+        vfModuleArtifactDefinition.setPayloadData(vfModulePayloadString);
+        if (vfModulePayloadString != null) {
+            newCheckSum = GeneralUtility.calculateMD5Base64EncodedByByteArray(vfModulePayloadString.getBytes());
+        }
+        vfModuleArtifactDefinition.setArtifactChecksum(newCheckSum);
+
+        Either<ArtifactDefinition, StorageOperationStatus> addArtifactToComponent = artifactToscaOperation.addArtifactToComponent(
+                vfModuleArtifactDefinition, service, NodeTypeEnum.ResourceInstance, true, currVF.getUniqueId());
+
+        Either<ArtifactDefinition, ResponseFormat> result;
+        if (addArtifactToComponent.isLeft()) {
+            result = Either.left(addArtifactToComponent.left().value());
+        } else {
+            result = Either.right(componentsUtils.getResponseFormat(componentsUtils.convertFromStorageResponse(addArtifactToComponent.right().value())));
+        }
+
+        return result;
+    }
+    ...
+        class VfModuleArtifactGenerator extends ArtifactGenerator<ArtifactDefinition> {
+        private User user;
+        private ComponentInstance componentInstance;
+        private Service service;
+        boolean shouldLock;
+        boolean inTransaction;
+        @Override
+        public Either<ArtifactDefinition, ResponseFormat> call() throws Exception {
+            return generateVfModuleInstanceArtifact(user, componentInstance, service, shouldLock, inTransaction);
+        }
+        private VfModuleArtifactGenerator(User user, ComponentInstance componentInstance, Service service, boolean shouldLock, boolean inTransaction) {
+            super();
+            this.user = user;
+            this.componentInstance = componentInstance;
+            this.service = service;
+            this.shouldLock = shouldLock;
+            this.inTransaction = inTransaction;
+        }
+    }
+}
+```
