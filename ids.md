@@ -563,3 +563,47 @@ public class ServiceBusinessLogic extends ComponentBusinessLogic {
     }
 }
 ```
+
+Group part:
+
+```java
+public class GroupInstance extends GroupInstanceDataDefinition {
+    /**
+     * Aligns the list of artifacts UUIDs of group instance according to received deployment artifacts
+     *
+     * @param deploymentArtifacts
+     */
+    public void alignArtifactsUuid(Map<String, ArtifactDefinition> deploymentArtifacts) {
+        List<String> artifactIds = getArtifacts();
+        log.debug("the artifacts Id's are: {}, and the deployment artifacts Id's are: {}", artifactIds, deploymentArtifacts);
+        if (CollectionUtils.isNotEmpty(artifactIds) && deploymentArtifacts != null) {
+            removeArtifactsDuplicates();
+            clearArtifactsUuid();
+            List<String> artifactUuids = getArtifactsUuid();
+            List<String> giArtifactUuids = getGroupInstanceArtifactsUuid();
+            for (String artifactId : artifactIds) {
+                String label = artifactId.substring(artifactId.lastIndexOf('.') + 1);
+                ArtifactDefinition artifact = deploymentArtifacts.get(label);
+                log.debug("current artifact id: {}, current artifact definition: {}", artifactId, artifact);
+                ArtifactTypeEnum artifactType = ArtifactTypeEnum.parse(artifact.getArtifactType());
+                if (artifactType != ArtifactTypeEnum.HEAT_ENV) {
+                    addArtifactsIdToCollection(artifactUuids, artifact);
+                } else {
+                    addArtifactsIdToCollection(giArtifactUuids, artifact);
+                }
+            }
+
+        }
+    }
+
+    private void addArtifactsIdToCollection(List<String> artifactUuids, ArtifactDefinition artifact) {
+        if (!artifactUuids.contains(artifact.getArtifactUUID()) && StringUtils.isNotEmpty(artifact.getArtifactUUID())) {
+            artifactUuids.add(artifact.getArtifactUUID());
+        }
+    }
+}
+...
+
+```java
+
+```
