@@ -29,6 +29,15 @@ POLICY-500I INFO: VF_MODULE_ARTIFACT: [
 ]
 ```
 
+```java
+public class VfModuleArtifactPayloadEx {
+	private String vfModuleModelName, vfModuleModelInvariantUUID, vfModuleModelVersion, vfModuleModelUUID, vfModuleModelCustomizationUUID, vfModuleModelDescription;
+	private Boolean isBase;
+	private List<String> artifacts;
+	private Map< String, Object> properties;
+}
+```
+
 Seems to be translated to
 
 ```java
@@ -58,4 +67,18 @@ public class VfModuleArtifactPayload {
     }
     ...
 }
+```
+
+Used in `ArtifactUuidFix.java` 1300 lines & `ServiceBusinessLogic.java` 2569 lines
+
+```java
+@org.springframework.stereotype.Component("artifactUuidFix")
+@Autowired
+public class ArtifactUuidFix {    
+    private JanusGraphDao janusGraphDao;
+    private ToscaOperationFacade toscaOperationFacade;
+    private ToscaExportHandler toscaExportUtils;
+    private ArtifactCassandraDao artifactCassandraDao;
+    private CsarUtils csarUtils;
+
 ```
