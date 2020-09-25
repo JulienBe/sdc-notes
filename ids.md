@@ -29,6 +29,8 @@ POLICY-500I INFO: VF_MODULE_ARTIFACT: [
 ]
 ```
 
+Seems to be translated to
+
 ```java
 public class VfModuleArtifactPayloadEx {
 	private String vfModuleModelName, vfModuleModelInvariantUUID, vfModuleModelVersion, vfModuleModelUUID, vfModuleModelCustomizationUUID, vfModuleModelDescription;
@@ -37,8 +39,6 @@ public class VfModuleArtifactPayloadEx {
 	private Map< String, Object> properties;
 }
 ```
-
-Seems to be translated to
 
 ```java
 public class VfModuleArtifactPayload {
